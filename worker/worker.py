@@ -966,49 +966,51 @@ def health_check_loop() -> None:
 
 # ─── Scraping loop (tier-aware) ─────────────────────────────────────────────
 def scraping_loop() -> None:
-    log.info("Scraping worker started (tier-aware: free=%d / contributor=%d per day)",
-             FREE_TIER_JOBS_PER_DAY, CONTRIBUTOR_TIER_JOBS_PER_DAY)
+    """Scrape into the GLOBAL job_listings pool.
+
+    IMPORTANT: This loop must NOT write to daily_usage.jobs_shown.
+    Only the frontend increments jobs_shown, when jobs are actually
+    shown to a user on their dashboard. If the worker increments it,
+    every user's quota is consumed before they ever open the dashboard.
+    """
+    log.info("Scraping worker started (writes to GLOBAL pool only)")
     while True:
         try:
             users = _json(pb("GET", "/collections/users/records?perPage=200")).get("items", [])
+
+            queries: set = set()
             for user in users:
-                try:
-                    user_id = user.get("id")
-                    if not user_id:
-                        continue
-                    tier = user.get("tier") or "free"
-                    daily_cap = CONTRIBUTOR_TIER_JOBS_PER_DAY if tier == "contributor" else FREE_TIER_JOBS_PER_DAY
-
-                    usage = get_or_create_daily_usage(user_id)
-                    jobs_shown = (usage.get("jobs_shown") or 0) if usage else 0
-                    if jobs_shown >= daily_cap:
-                        log.info("user=%s tier=%s at daily cap (%d/%d) - skipping",
-                                 user_id, tier, jobs_shown, daily_cap)
-                        continue
-
-                    query = " ".join(filter(None, [
-                        str(user.get("desired_job_title", "")).strip(),
-                        str(user.get("skills", "")).strip(),
-                    ]))
-                    if not query:
-                        continue
+                q = " ".join(filter(None, [
+                    str(user.get("desired_job_title", "")).strip(),
+                    str(user.get("skills", "")).strip(),
+                ]))
+                if q:
                     if user.get("remote_preference") == "remote":
-                        query += " remote"
+                        q += " remote"
+                    queries.add(q)
 
-                    remaining = daily_cap - jobs_shown
-                    jobs, _ = agentic_job_search(query, user.get("location") or "United States")
-                    jobs = jobs[:remaining]
-                    insert_or_get_ids(jobs)
-                    increment_usage(user_id, "jobs_shown", len(jobs))
-                    log.info("user=%s tier=%s scraped=%d remaining_cap=%d",
-                             user_id, tier, len(jobs), remaining - len(jobs))
-                    time.sleep(2)
+            if not queries:
+                queries.add("software developer")
+
+            location = "United States"
+            total_inserted = 0
+            for query in queries:
+                try:
+                    jobs, _ = agentic_job_search(query, location)
+                    ids = insert_or_get_ids(jobs)
+                    total_inserted += len(ids)
+                    log.info("scrape query=%s inserted_or_matched=%d", query[:50], len(ids))
+                    time.sleep(1)
                 except Exception as exc:
-                    log.warning("scraping for user %s failed: %s", user.get("id"), exc)
-            log.info("Scraping cycle complete; sleeping 1 hour")
+                    log.warning("scrape query=%s failed: %s", query[:50], exc)
+
+            log.info("Scraping cycle complete: %d jobs in pool (workers wrote NO daily_usage)",
+                     total_inserted)
         except Exception as exc:
             log.exception("Scraping loop recovered from error: %s", exc)
         time.sleep(3600)
+
+
 
 
 # ─── Bootstrap ──────────────────────────────────────────────────────────────
