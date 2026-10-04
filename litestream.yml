@@ -2,10 +2,10 @@ dbs:
   - path: /app/pb_data/data.db
     replicas:
       - type: s3
-        bucket: jobseeker-bucket
+        bucket: ${LITESTREAM_S3_BUCKET}
         path: jobseeker-db
-        endpoint: s3.us-midwest-1.idrivee2.com
-        region: us-midwest-1
-        access-key-id: gDTPNc7uWisLoAOVwmxy
-        secret-access-key: P5DjY5xD4ja0vt8v4x8JWZvNQBHFuT0JxiMgde9H
+        endpoint: ${LITESTREAM_S3_ENDPOINT}
+        region: us-west-4
+        access-key-id: ${LITESTREAM_ACCESS_KEY_ID}
+        secret-access-key: ${LITESTREAM_SECRET_ACCESS_KEY}
         force-path-style: true
