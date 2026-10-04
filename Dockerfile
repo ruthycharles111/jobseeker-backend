@@ -1,6 +1,6 @@
 FROM python:3.11-slim
 
-# Install system dependencies: git (needed for pip git install), wget, unzip, ca-certificates, Chromium, etc.
+# System dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     git wget unzip ca-certificates \
     chromium chromium-driver \
@@ -17,17 +17,19 @@ RUN wget -q -O /tmp/pb.zip https://github.com/pocketbase/pocketbase/releases/dow
 RUN wget -q https://github.com/benbjohnson/litestream/releases/download/v0.3.13/litestream-v0.3.13-linux-amd64.tar.gz \
     && tar -xzf litestream-v0.3.13-linux-amd64.tar.gz -C /app && rm litestream-v0.3.13-linux-amd64.tar.gz && chmod +x /app/litestream
 
-# Set up a virtual environment for the worker
+# Python virtual environment for worker
 RUN python -m venv /app/worker-venv
 
-# Copy worker requirements and install them (Playwright + jobspy from git)
+# Copy requirements and install (this now includes serpapi, google-search-results, etc.)
 COPY worker/requirements.txt /app/worker-requirements.txt
 RUN /app/worker-venv/bin/pip install --no-cache-dir -r /app/worker-requirements.txt
 
-# Copy the rest of the project
+# Copy all remaining files
 COPY run.sh /app/run.sh
 COPY litestream.yml /app/litestream.yml
 COPY worker/worker.py /app/worker.py
+COPY worker/supervisor.py /app/supervisor.py
+COPY worker/source_probe.py /app/source_probe.py
 
 RUN chmod +x /app/run.sh && mkdir -p /app/pb_data
 
