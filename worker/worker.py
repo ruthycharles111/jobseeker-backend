@@ -1,4 +1,4 @@
--"""Resilient PocketBase worker for JobSeeker AI backend.
+"""Resilient PocketBase worker for JobSeeker AI backend.
 
 Responsibilities:
   * Legacy chat replies (chat_messages collection)
